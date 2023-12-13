@@ -1,0 +1,121 @@
+mql5
+//+------------------------------------------------------------------+
+//|                                                   Royal Scalping Indicator M4 |
+//|                                                     forexroboteasy.com |
+//|                                                      Forex Robot Easy Team |
+//+------------------------------------------------------------------+
+#property copyright 'forexroboteasy.com'
+#property link      'forexroboteasy.com'
+#property version   '1.00'
+#property strict
+
+// Define input parameters
+input bool EnableSoundAlerts = true; // Enable sound alerts
+input bool EnablePushNotifications = true; // Enable push notifications
+input bool EnableFlashingSignals = true; // Enable flashing signals
+input int TrendOscillatorPeriod = 14; // Period for the trend oscillator
+input int SignalOscillatorPeriod = 9; // Period for the signal oscillator
+input double RiskPercentage = 2; // Risk percentage for position sizing
+
+// Define global variables
+int trendOscillatorHandle; // Handle for the trend oscillator indicator
+int signalOscillatorHandle; // Handle for the signal oscillator indicator
+double lotSize; // Lot size for trading
+
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Create trend oscillator
+   trendOscillatorHandle = iCustom(_Symbol, _Period, 'TrendOscillator', TrendOscillatorPeriod);
+
+   // Create signal oscillator
+   signalOscillatorHandle = iCustom(_Symbol, _Period, 'SignalOscillator', SignalOscillatorPeriod);
+
+   // Calculate lot size based on risk percentage
+   lotSize = AccountBalance() * RiskPercentage / 100 / (SymbolInfoDouble(_Symbol, SYMBOL_MARGIN_REQUIRED) * MarketInfo(_Symbol, MODE_TICKVALUE));
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator deinitialization function                       |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   // Delete trend oscillator
+   ObjectDelete(trendOscillatorHandle);
+
+   // Delete signal oscillator
+   ObjectDelete(signalOscillatorHandle);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+void OnCalculate(const int rates_total,
+                 const int prev_calculated,
+                 const datetime &time[],
+                 const double &open[],
+                 const double &high[],
+                 const double &low[],
+                 const double &close[],
+                 const long &tick_volume[],
+                 const long &volume[],
+                 const int &spread[])
+{
+   // Calculate trend oscillator value
+   double trendOscillatorValue = iCustom(_Symbol, _Period, 'TrendOscillator', TrendOscillatorPeriod, 0);
+
+   // Calculate signal oscillator value
+   double signalOscillatorValue = iCustom(_Symbol, _Period, 'SignalOscillator', SignalOscillatorPeriod, 0);
+
+   // Check for trend reversal
+   if (trendOscillatorValue > 0 && signalOscillatorValue > 0 && EnableFlashingSignals)
+   {
+      // Flash signal on chart
+      ObjectCreate(0, 'TrendReversalSignal', OBJ_LABEL, 0, 0, 0);
+      ObjectSetText('TrendReversalSignal', 'Trend Reversal', 10, 'Arial', Red);
+      ObjectSet('TrendReversalSignal', OBJPROP_CORNER, 0);
+      ObjectSet('TrendReversalSignal', OBJPROP_XDISTANCE, 20);
+      ObjectSet('TrendReversalSignal', OBJPROP_YDISTANCE, 20);
+   }
+
+   // Check for trading opportunity
+   if (trendOscillatorValue > 0 && signalOscillatorValue > 0)
+   {
+      // Generate buy signal
+      if (EnableSoundAlerts)
+         PlaySound('BuySignal.wav');
+
+      if (EnablePushNotifications)
+         SendNotification('Buy Signal - ' + _Symbol + ' ' + EnumToString(_Period));
+
+      // Place buy order
+      OrderSend(_Symbol, OP_BUY, lotSize, Ask, 3, Bid - 2 * MarketInfo(_Symbol, MODE_STOPLEVEL), Bid + 2 * MarketInfo(_Symbol, MODE_STOPLEVEL), 'Buy Signal', MagicNumber, 0, Green);
+   }
+   else if (trendOscillatorValue < 0 && signalOscillatorValue < 0)
+   {
+      // Generate sell signal
+      if (EnableSoundAlerts)
+         PlaySound('SellSignal.wav');
+
+      if (EnablePushNotifications)
+         SendNotification('Sell Signal - ' + _Symbol + ' ' + EnumToString(_Period));
+
+      // Place sell order
+      OrderSend(_Symbol, OP_SELL, lotSize, Bid, 3, Ask - 2 * MarketInfo(_Symbol, MODE_STOPLEVEL), Ask + 2 * MarketInfo(_Symbol, MODE_STOPLEVEL), 'Sell Signal', MagicNumber, 0, Red);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Custom function to send push notification                         |
+//+------------------------------------------------------------------+
+void SendNotification(const string message)
+{
+   string pushNotification = message;
+   
+   // Send push notification
+   NotificationsSend(pushNotification);
+}
